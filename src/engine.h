@@ -102,6 +102,8 @@ private:
 
     Instance *instance_;
     KeymanConfig config_;
+    std::unique_ptr<HandlerTableEntry<EventHandler>> updateHandler_;
+    int64_t timestamp_ = 0;
 };
 
 class KeymanEngineFactory : public AddonFactory {

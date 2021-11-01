@@ -28,6 +28,8 @@ FCITX_DEFINE_LOG_CATEGORY(keyman, "keyman");
 
 namespace fcitx {
 
+namespace {
+
 std::vector<char16_t> utf8ToUTF16(std::string_view str) {
     if (!utf8::validate(str)) {
         return {};
@@ -76,7 +78,7 @@ std::string utf16ToUTF8(Iter start, Iter end) {
     return result;
 }
 
-static std::string get_current_context_text(km_kbp_context *context) {
+std::string get_current_context_text(km_kbp_context *context) {
     std::string result;
     UniqueCPtr<km_kbp_context_item, km_kbp_context_items_dispose>
         context_items_ptr;
@@ -100,6 +102,22 @@ static std::string get_current_context_text(km_kbp_context *context) {
     }
     return "";
 }
+
+std::set<std::string> listKeymapDirs() {
+    // Locate all directory under $XDG_DATA/keyman
+    std::set<std::string> keymapDirs;
+    StandardPath::global().scanFiles(
+        StandardPath::Type::Data, "keyman",
+        [&keymapDirs](const std::string &path, const std::string &dir, bool) {
+            if (fs::isdir(stringutils::joinPath(dir, path))) {
+                keymapDirs.insert(path);
+            }
+            return true;
+        });
+    return keymapDirs;
+}
+
+} // namespace
 
 class KeymanState : public InputContextProperty {
 public:
@@ -198,19 +216,33 @@ private:
     InputContext *ic_;
 };
 
-KeymanEngine::KeymanEngine(Instance *instance) : instance_(instance) {}
+KeymanEngine::KeymanEngine(Instance *instance) : instance_(instance) {
+    updateHandler_ = instance_->watchEvent(
+        EventType::CheckUpdate, EventWatcherPhase::Default,
+        [this](Event &event) {
+            auto &update = static_cast<CheckUpdateEvent &>(event);
+            // Locate all directory under $XDG_DATA/keyman
+            std::set<std::string> keymapDirs = listKeymapDirs();
+            FCITX_KEYMAN_DEBUG() << "Keyman directories: " << keymapDirs;
+            std::unordered_map<std::string, std::unique_ptr<KeymanKeyboard>>
+                keyboards;
+            for (const auto &keymapDir : keymapDirs) {
+                auto kmpJsonFiles = StandardPath::global().locateAll(
+                    StandardPath::Type::Data,
+                    stringutils::joinPath("keyman", keymapDir, "kmp.json"));
+                for (const auto &kmpJsonFile : kmpJsonFiles) {
+                    if (timestamp_ < fs::modifiedTime(kmpJsonFile)) {
+                        update.setHasUpdate();
+                        return;
+                    }
+                }
+            }
+        });
+}
 
 std::vector<InputMethodEntry> KeymanEngine::listInputMethods() {
     // Locate all directory under $XDG_DATA/keyman
-    std::set<std::string> keymapDirs;
-    StandardPath::global().scanFiles(
-        StandardPath::Type::Data, "keyman",
-        [&keymapDirs](const std::string &path, const std::string &dir, bool) {
-            if (fs::isdir(stringutils::joinPath(dir, path))) {
-                keymapDirs.insert(path);
-            }
-            return true;
-        });
+    std::set<std::string> keymapDirs = listKeymapDirs();
     FCITX_KEYMAN_DEBUG() << "Keyman directories: " << keymapDirs;
     std::unordered_map<std::string, std::unique_ptr<KeymanKeyboard>> keyboards;
     for (const auto &keymapDir : keymapDirs) {
@@ -219,6 +251,8 @@ std::vector<InputMethodEntry> KeymanEngine::listInputMethods() {
             stringutils::joinPath("keyman", keymapDir, "kmp.json"), O_RDONLY);
         for (const auto &kmpJsonFile : kmpJsonFiles) {
             try {
+                timestamp_ =
+                    std::max(timestamp_, fs::modifiedTime(kmpJsonFile.path()));
                 KmpMetadata metadata(kmpJsonFile.fd());
                 for (const auto &[id, keyboard] : metadata.keyboards()) {
                     if (auto iter = keyboards.find(id);
