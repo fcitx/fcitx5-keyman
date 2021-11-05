@@ -14,6 +14,12 @@
 #include "kmpdata.h"
 #include "kmpmetadata.h"
 
+// Keyman introduced this in release-15.0.115-alpha, which is later than
+// km_kbp_process_event API change.
+#if defined(KM_KBP_VERSION_MAJOR)
+#define NEW_KM_KBP_PROCESS_EVENT
+#endif
+
 #define MAXCONTEXT_ITEMS 128
 #define KEYMAN_BACKSPACE 14
 #define KEYMAN_BACKSPACE_KEYSYM 0xff08
@@ -377,49 +383,34 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     }
     auto keycode = keyEvent.key().code() - 8;
     auto state = keyEvent.rawKey().states();
+    switch (keycode) {
+    case KEYMAN_LCTRL:
+        keyman->lctrl_pressed = !keyEvent.isRelease();
+        break;
+    case KEYMAN_RCTRL:
+        keyman->rctrl_pressed = !keyEvent.isRelease();
+        break;
+    case KEYMAN_LALT:
+        keyman->lalt_pressed = !keyEvent.isRelease();
+        break;
+    case KEYMAN_RALT:
+        keyman->ralt_pressed = !keyEvent.isRelease();
+        break;
+    default:
+        break;
+    }
+#ifndef NEW_KM_KBP_PROCESS_EVENT
     if (keyEvent.isRelease()) {
-        switch (keycode) {
-        case KEYMAN_LCTRL:
-            keyman->lctrl_pressed = false;
-            break;
-        case KEYMAN_RCTRL:
-            keyman->rctrl_pressed = false;
-            break;
-        case KEYMAN_LALT:
-            keyman->lalt_pressed = false;
-            break;
-        case KEYMAN_RALT:
-            keyman->ralt_pressed = false;
-            break;
-        default:
-            break;
-        }
         return;
     }
+#endif
 
     if (keycode < 0 || keycode > 255) {
         return;
     }
 
-    if (keycode_to_vk[keycode] == 0) // key we don't handle
-    {
-        // save if a possible Ctrl or Alt modifier
-        switch (keycode) {
-        case KEYMAN_LCTRL:
-            keyman->lctrl_pressed = true;
-            break;
-        case KEYMAN_RCTRL:
-            keyman->rctrl_pressed = true;
-            break;
-        case KEYMAN_LALT:
-            keyman->lalt_pressed = true;
-            break;
-        case KEYMAN_RALT:
-            keyman->ralt_pressed = true;
-            break;
-        default:
-            break;
-        }
+    if (keycode_to_vk[keycode] == 0) {
+        // key we don't handles
         return;
     }
 
@@ -460,7 +451,12 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     FCITX_KEYMAN_DEBUG() << ("before process key event")
                          << get_current_context_text(context);
     FCITX_KEYMAN_DEBUG() << "km_mod_state=" << km_mod_state;
+#ifdef NEW_KM_KBP_PROCESS_EVENT
+    km_kbp_process_event(keyman->state, keycode_to_vk[keycode], km_mod_state,
+                         !keyEvent.isRelease());
+#else
     km_kbp_process_event(keyman->state, keycode_to_vk[keycode], km_mod_state);
+#endif
 
     FCITX_KEYMAN_DEBUG() << ("after process key event")
                          << get_current_context_text(context);
