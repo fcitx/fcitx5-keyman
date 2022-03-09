@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.4.0)
 
-project(fcitx5-keyman VERSION 1.0.2)
+project(fcitx5-keyman VERSION 1.0.3)
 
 include(FeatureSummary)
 include(GNUInstallDirs)
