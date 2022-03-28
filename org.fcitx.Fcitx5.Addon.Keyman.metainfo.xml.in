@@ -15,5 +15,6 @@
     <release version="1.0.1" date="2021-12-04"/>
     <release version="1.0.0" date="2021-11-06"/>
   </releases>
+  <content_rating type="oars-1.1"/>
 </component>
 
