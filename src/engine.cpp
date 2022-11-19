@@ -276,13 +276,22 @@ std::vector<InputMethodEntry> KeymanEngine::listInputMethods() {
     }
     std::vector<InputMethodEntry> result;
     for (auto &[id, keyboard] : keyboards) {
+        std::string icon = "km-config";
+        // Check if icon file exists, otherwise fallback to keyman's icon.
+        for (auto *suffix : {".bmp.png", ".icon.png"}) {
+            auto path = stringutils::joinPath(keyboard->baseDir,
+                                              stringutils::concat(id, suffix));
+            if (fs::isreg(path)) {
+                icon = std::move(path);
+                break;
+            }
+        }
+
         result.emplace_back(stringutils::concat("keyman:", id),
                             stringutils::concat(keyboard->name, " (Keyman)"),
                             keyboard->language, "keyman");
-        result.back()
-            .setIcon("km-config")
-            .setConfigurable(true)
-            .setUserData(std::move(keyboard));
+        result.back().setIcon(icon).setConfigurable(true).setUserData(
+            std::move(keyboard));
     }
     return result;
 }
