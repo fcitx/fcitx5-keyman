@@ -457,7 +457,7 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
         }
     }
     auto context = km_kbp_state_context(keyman->state);
-    FCITX_KEYMAN_DEBUG() << ("before process key event")
+    FCITX_KEYMAN_DEBUG() << "before process key event context: "
                          << get_current_context_text(context);
     FCITX_KEYMAN_DEBUG() << "km_mod_state=" << km_mod_state;
 #ifdef NEW_KM_KBP_PROCESS_EVENT
@@ -467,7 +467,7 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     km_kbp_process_event(keyman->state, keycode_to_vk[keycode], km_mod_state);
 #endif
 
-    FCITX_KEYMAN_DEBUG() << ("after process key event")
+    FCITX_KEYMAN_DEBUG() << "after process key event context: "
                          << get_current_context_text(context);
 
     // km_kbp_state_action_items to get action items
@@ -498,14 +498,15 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
         switch (action_items[i].type) {
         case KM_KBP_IT_MARKER:
             FCITX_KEYMAN_DEBUG()
-                << "MARKER action " << i + 1 << num_action_items;
+                << "MARKER action " << i + 1 << "/" << num_action_items;
             break;
         case KM_KBP_IT_ALERT:
             FCITX_KEYMAN_DEBUG()
-                << "ALERT action " << i + 1 << num_action_items;
+                << "ALERT action " << i + 1 << "/" << num_action_items;
             break;
         case KM_KBP_IT_BACK:
-            FCITX_KEYMAN_DEBUG() << "BACK action " << i + 1 << num_action_items;
+            FCITX_KEYMAN_DEBUG()
+                << "BACK action " << i + 1 << "/" << num_action_items;
             if (!keyman->char_buffer.empty()) {
                 keyman->char_buffer.backspace();
             } else if (ok_for_single_backspace(action_items, i,
@@ -513,7 +514,6 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
                 FCITX_KEYMAN_DEBUG() << "no char actions, just single back";
                 return;
             } else {
-
                 if (ic->capabilityFlags().test(
                         CapabilityFlag::SurroundingText)) {
                     ic->deleteSurroundingText(-1, 1);
@@ -575,17 +575,18 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
                 keyman->char_buffer.clear();
             }
             FCITX_KEYMAN_DEBUG()
-                << "EMIT_KEYSTROKE action " << i + 1 << num_action_items;
+                << "EMIT_KEYSTROKE action " << i + 1 << "/" << num_action_items;
             keyman->emitting_keystroke = true;
             break;
         case KM_KBP_IT_INVALIDATE_CONTEXT:
-            FCITX_KEYMAN_DEBUG()
-                << "INVALIDATE_CONTEXT action " << i + 1 << num_action_items;
+            FCITX_KEYMAN_DEBUG() << "INVALIDATE_CONTEXT action " << i + 1 << "/"
+                                 << num_action_items;
             km_kbp_context_clear(km_kbp_state_context(keyman->state));
             keyman->resetContext();
             break;
         case KM_KBP_IT_END:
-            FCITX_KEYMAN_DEBUG() << "END action " << i + 1 << num_action_items;
+            FCITX_KEYMAN_DEBUG()
+                << "END action " << i + 1 << "/" << num_action_items;
             if (!keyman->char_buffer.empty()) {
                 ic->commitString(keyman->char_buffer.userInput());
                 keyman->char_buffer.clear();
@@ -597,7 +598,7 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
             break;
         default:
             FCITX_KEYMAN_DEBUG()
-                << "Unknown action " << i + 1 << num_action_items;
+                << "Unknown action " << i + 1 << "/" << num_action_items;
         }
     }
     flushUtf16Buffer();
