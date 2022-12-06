@@ -4,14 +4,15 @@
 #
 # Translators:
 # Ettore Atalan <atalanttore@googlemail.com>, 2022
+# mar well <m.wellendorf@gmx.de>, 2022
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: fcitx5-keyman\n"
 "Report-Msgid-Bugs-To: fcitx-dev@googlegroups.com\n"
-"POT-Creation-Date: 2022-01-15 20:24+0000\n"
+"POT-Creation-Date: 2022-12-06 20:25+0000\n"
 "PO-Revision-Date: 2021-11-01 14:47+0000\n"
-"Last-Translator: Ettore Atalan <atalanttore@googlemail.com>, 2022\n"
+"Last-Translator: mar well <m.wellendorf@gmx.de>, 2022\n"
 "Language-Team: German (https://www.transifex.com/fcitx/teams/12005/de/)\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
@@ -29,9 +30,9 @@ msgstr ""
 
 #: org.fcitx.Fcitx5.Addon.Keyman.metainfo.xml.in:7 src/keyman.conf.in.in:4
 msgid "Keyman support for Fcitx 5"
-msgstr ""
+msgstr "Keyman-Unterstützung for Fcitx5"
 
-#: src/engine.cpp:632
+#: src/engine.cpp:642
 msgid "Not available"
 msgstr "Nicht verfügbar"
 
