@@ -160,6 +160,7 @@ public:
         resetContext();
     }
 
+    // Update context from surrounding if possible.
     void resetContext() {
         auto context = km_core_state_context(state);
         if (ic_->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
@@ -176,7 +177,8 @@ public:
             auto endIter =
                 utf8::nextNChar(startIter, context_pos - context_start);
             std::string new_context(startIter, endIter);
-            if (!stringutils::endsWith(new_context, current_context_utf8)) {
+            FCITX_INFO() << new_context;
+            if (new_context != current_context_utf8) {
                 FCITX_KEYMAN_DEBUG()
                     << "setting context because it has changed from expected";
                 km_core_context_item *context_items = nullptr;
@@ -360,9 +362,14 @@ fcitx::KeymanKeyboardData::KeymanKeyboardData(
 fcitx::KeymanKeyboardData::~KeymanKeyboardData() { factory_.unregister(); }
 
 void fcitx::KeymanEngine::activate(const fcitx::InputMethodEntry &entry,
-                                   fcitx::InputContextEvent &) {
+                                   fcitx::InputContextEvent &event) {
     auto data = static_cast<const KeymanKeyboard *>(entry.userData());
     data->load();
+    auto keyman = state(entry, *event.inputContext());
+    if (!keyman) {
+        return;
+    }
+    keyman->resetContext();
 }
 
 static bool ok_for_single_backspace(const km_core_action_item *action_items,
@@ -408,7 +415,11 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     }
 
     if (keycode_to_vk[keycode] == 0) {
-        // key we don't handles
+        // key that we don't handles
+        if (keyEvent.key().isCursorMove()) {
+            km_core_context_clear(km_core_state_context(keyman->state));
+            keyman->resetContext();
+        }
         return;
     }
 
