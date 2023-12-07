@@ -23,7 +23,7 @@
 #include <fcitx/inputmethodengine.h>
 #include <fcitx/instance.h>
 #include <fcitx/menu.h>
-#include <keyman/keyboardprocessor.h>
+#include <keyman_core_api.h>
 #include "kmpmetadata.h"
 
 namespace fcitx {
@@ -44,14 +44,14 @@ public:
     const auto &metadata() const { return metadata_; }
     auto *kbpKeyboard() const { return keyboard_; }
     const auto &factory() const { return factory_; }
-    void setOption(const km_kbp_cp *key, const km_kbp_cp *value);
+    void setOption(const km_core_cp *key, const km_core_cp *value);
 
 private:
     Instance *instance_;
     bool loaded_ = false;
     std::string ldmlFile_;
     const KeymanKeyboard &metadata_;
-    km_kbp_keyboard *keyboard_ = nullptr;
+    km_core_keyboard *keyboard_ = nullptr;
     FactoryFor<KeymanState> factory_;
     RawConfig config_;
 };

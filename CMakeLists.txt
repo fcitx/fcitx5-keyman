@@ -8,7 +8,7 @@ include(GNUInstallDirs)
 find_package(Gettext REQUIRED)
 find_package(Fcitx5Core 5.0.10 REQUIRED)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(Keyman REQUIRED IMPORTED_TARGET "keyman_kmn_processor")
+pkg_check_modules(Keyman REQUIRED IMPORTED_TARGET "keyman_core")
 pkg_check_modules(JsonC REQUIRED IMPORTED_TARGET "json-c")
 
 add_definitions(-DFCITX_GETTEXT_DOMAIN=\"fcitx5-keyman\")
