@@ -7,8 +7,10 @@
  */
 #include "engine.h"
 #include <fcntl.h>
+#include <algorithm>
 #include <fcitx-utils/inputbuffer.h>
 #include <fcitx-utils/log.h>
+#include <fcitx-utils/misc.h>
 #include <fcitx-utils/utf8.h>
 #include <keyman_core_api.h>
 #include "kmpdata.h"
@@ -91,12 +93,12 @@ std::string get_current_context_text(km_core_context *context) {
     if (status == KM_CORE_STATUS_OK) {
         size_t buf_size = 0;
         km_core_context_items_to_utf8(context_items_ptr.get(), nullptr,
-                                     &buf_size);
+                                      &buf_size);
         if (buf_size) {
             std::vector<char> buf;
             buf.resize(buf_size + 1);
             km_core_context_items_to_utf8(context_items_ptr.get(), buf.data(),
-                                         &buf_size);
+                                          &buf_size);
             return {buf.data()};
         }
     }
@@ -162,10 +164,8 @@ public:
 
     // Update context from surrounding if possible.
     void resetContext() {
-        auto context = km_core_state_context(state);
-        if (ic_->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
-            auto current_context_utf8 = get_current_context_text(context);
-
+        if (ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
+            ic_->surroundingText().isValid()) {
             auto text = ic_->surroundingText().text();
             auto context_pos = std::min(ic_->surroundingText().anchor(),
                                         ic_->surroundingText().cursor());
@@ -177,20 +177,15 @@ public:
             auto endIter =
                 utf8::nextNChar(startIter, context_pos - context_start);
             std::string new_context(startIter, endIter);
-            FCITX_INFO() << new_context;
-            if (new_context != current_context_utf8) {
-                FCITX_KEYMAN_DEBUG()
-                    << "setting context because it has changed from expected";
-                km_core_context_item *context_items = nullptr;
-                if (km_core_context_items_from_utf8(new_context.data(),
-                                                   &context_items) ==
-                    KM_CORE_STATUS_OK) {
-                    km_core_context_set(context, context_items);
-                }
-                km_core_context_items_dispose(context_items);
-            }
+            auto utf16Context = utf8ToUTF16(new_context);
+            km_core_state_context_set_if_needed(
+                state, reinterpret_cast<km_core_cp *>(utf16Context.data()));
+            FCITX_KEYMAN_DEBUG()
+                << "Set context from application: " << new_context;
         } else {
-            km_core_context_clear(context);
+            km_core_cp empty[1] = {0};
+            FCITX_KEYMAN_DEBUG() << "Clear context";
+            km_core_state_context_set_if_needed(state, empty);
         }
     }
 
@@ -200,7 +195,6 @@ public:
         lalt_pressed = false;
         ralt_pressed = false;
         char_buffer.clear();
-        emitting_keystroke = false;
     }
 
     auto *keyboard() { return keyboard_; }
@@ -211,7 +205,6 @@ public:
     bool lalt_pressed = false;
     bool ralt_pressed = false;
     InputBuffer char_buffer{InputBufferOption::FixedCursor};
-    bool emitting_keystroke = false;
 
 private:
     KeymanKeyboardData *keyboard_;
@@ -372,18 +365,6 @@ void fcitx::KeymanEngine::activate(const fcitx::InputMethodEntry &entry,
     keyman->resetContext();
 }
 
-static bool ok_for_single_backspace(const km_core_action_item *action_items,
-                                    size_t i, size_t num_actions) {
-    for (size_t j = i + 1; j < num_actions; j++) {
-        if (action_items[j].type == KM_CORE_IT_BACK ||
-            action_items[j].type == KM_CORE_IT_CHAR ||
-            action_items[j].type == KM_CORE_IT_EMIT_KEYSTROKE) {
-            return false;
-        }
-    }
-    return true;
-}
-
 void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
                                    fcitx::KeyEvent &keyEvent) {
     auto ic = keyEvent.inputContext();
@@ -456,150 +437,116 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
                 << "modstate KM_CORE_MODIFIER_LCTRL from lctrl_pressed";
         }
     }
+
+    if (ic->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
+        ic->surroundingText().isValid()) {
+        keyman->resetContext();
+    }
+
     auto context = km_core_state_context(keyman->state);
     FCITX_KEYMAN_DEBUG() << "before process key event context: "
                          << get_current_context_text(context);
     FCITX_KEYMAN_DEBUG() << "km_mod_state=" << km_mod_state;
     km_core_process_event(keyman->state, keycode_to_vk[keycode], km_mod_state,
-                         !keyEvent.isRelease(), 0);
+                          !keyEvent.isRelease(), 0);
     FCITX_KEYMAN_DEBUG() << "after process key event context: "
                          << get_current_context_text(context);
 
-    // km_core_state_action_items to get action items
-    size_t num_action_items;
-    const km_core_action_item *action_items =
-        km_core_state_action_items(keyman->state, &num_action_items);
+    UniqueCPtr<km_core_actions, &km_core_actions_dispose> actions(
+        km_core_state_get_actions(keyman->state));
 
-    std::vector<uint16_t> utf16Buffer;
-    auto flushUtf16Buffer = [&utf16Buffer, keyman]() {
-        if (utf16Buffer.empty()) {
-            return;
-        }
-        std::string utf8 = utf16ToUTF8(utf16Buffer.begin(), utf16Buffer.end());
-        keyman->char_buffer.type(utf8);
-        utf16Buffer.clear();
-    };
-
-    for (size_t i = 0; i < num_action_items; i++) {
-        if (action_items[i].type == KM_CORE_IT_CHAR) {
-            FCITX_KEYMAN_DEBUG()
-                << "CHAR action " << i + 1 << "/" << num_action_items;
-            utf16Buffer.push_back(action_items[i].character);
-            continue;
+    auto numOfDelete = actions->code_points_to_delete;
+    FCITX_KEYMAN_DEBUG() << "BACK action " << numOfDelete;
+    while (numOfDelete > 0) {
+        if (!keyman->char_buffer.empty()) {
+            keyman->char_buffer.backspace();
+            numOfDelete--;
         } else {
-            flushUtf16Buffer();
-        }
-
-        switch (action_items[i].type) {
-        case KM_CORE_IT_MARKER:
-            FCITX_KEYMAN_DEBUG()
-                << "MARKER action " << i + 1 << "/" << num_action_items;
             break;
-        case KM_CORE_IT_ALERT:
-            FCITX_KEYMAN_DEBUG()
-                << "ALERT action " << i + 1 << "/" << num_action_items;
-            break;
-        case KM_CORE_IT_BACK:
-            FCITX_KEYMAN_DEBUG()
-                << "BACK action " << i + 1 << "/" << num_action_items;
-            if (!keyman->char_buffer.empty()) {
-                keyman->char_buffer.backspace();
-            } else if (ok_for_single_backspace(action_items, i,
-                                               num_action_items)) {
-                FCITX_KEYMAN_DEBUG() << "no char actions, just single back";
-                return;
-            } else {
-                if (ic->capabilityFlags().test(
-                        CapabilityFlag::SurroundingText)) {
-                    ic->deleteSurroundingText(-1, 1);
-                    FCITX_KEYMAN_DEBUG() << "deleting surrounding text 1 char";
-                } else {
-                    FCITX_KEYMAN_DEBUG()
-                        << "forwarding backspace with reset context";
-                    km_core_context_item *context_items;
-                    km_core_context_get(km_core_state_context(keyman->state),
-                                       &context_items);
-                    keyman->resetContext();
-                    ic->forwardKey(Key(FcitxKey_BackSpace));
-                    km_core_context_set(km_core_state_context(keyman->state),
-                                       context_items);
-                    km_core_context_items_dispose(context_items);
-                }
-            }
-            break;
-        case KM_CORE_IT_PERSIST_OPT:
-            FCITX_KEYMAN_DEBUG()
-                << "PERSIST_OPT action " << i + 1 << "/" << num_action_items;
-            // Save keyboard option
-            if (action_items[i].option != NULL) {
-                // Allocate for 1 option plus 1 pad struct of 0's
-                std::array<km_core_option_item, 2> keyboard_opts;
-                memmove(&(keyboard_opts[0]), action_items[i].option,
-                        sizeof(km_core_option_item));
-                memset(&keyboard_opts[1], 0, sizeof(km_core_option_item));
-                // Propagate to all state.
-                instance_->inputContextManager().foreach([this, &entry,
-                                                          &keyboard_opts](
-                                                             InputContext *ic) {
-                    if (auto keyman = this->state(entry, *ic)) {
-                        auto event_status = km_core_state_options_update(
-                            keyman->state, keyboard_opts.data());
-                        if (event_status != KM_CORE_STATUS_OK) {
-                            FCITX_KEYMAN_DEBUG()
-                                << "problem saving option for km_core_keyboard";
-                        }
-                    }
-                    return true;
-                });
-
-                // Put the keyboard option into config
-                if (action_items[i].option != NULL &&
-                    action_items[i].option->key != NULL &&
-                    action_items[i].option->value != NULL) {
-                    FCITX_KEYMAN_DEBUG() << "Saving keyboard option to Config";
-                    // Load the current keyboard options from DConf
-                    keyman->keyboard()->setOption(
-                        action_items[i].option->key,
-                        action_items[i].option->value);
-                }
-            }
-            break;
-        case KM_CORE_IT_EMIT_KEYSTROKE:
-            if (!keyman->char_buffer.empty()) {
-                ic->commitString(keyman->char_buffer.userInput());
-                keyman->char_buffer.clear();
-            }
-            FCITX_KEYMAN_DEBUG()
-                << "EMIT_KEYSTROKE action " << i + 1 << "/" << num_action_items;
-            keyman->emitting_keystroke = true;
-            break;
-        case KM_CORE_IT_INVALIDATE_CONTEXT:
-            FCITX_KEYMAN_DEBUG() << "INVALIDATE_CONTEXT action " << i + 1 << "/"
-                                 << num_action_items;
-            km_core_context_clear(km_core_state_context(keyman->state));
-            keyman->resetContext();
-            break;
-        case KM_CORE_IT_END:
-            FCITX_KEYMAN_DEBUG()
-                << "END action " << i + 1 << "/" << num_action_items;
-            if (!keyman->char_buffer.empty()) {
-                ic->commitString(keyman->char_buffer.userInput());
-                keyman->char_buffer.clear();
-            }
-            if (keyman->emitting_keystroke) {
-                keyman->emitting_keystroke = false;
-                return;
-            }
-            break;
-        default:
-            FCITX_KEYMAN_DEBUG()
-                << "Unknown action " << i + 1 << "/" << num_action_items;
         }
     }
-    flushUtf16Buffer();
+
+    if (numOfDelete > 0) {
+        if (ic->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
+            ic->deleteSurroundingText(-numOfDelete, numOfDelete);
+            FCITX_KEYMAN_DEBUG() << "deleting surrounding text 1 char";
+        } else {
+            FCITX_KEYMAN_DEBUG() << "forwarding backspace with reset context";
+            km_core_context_item *context_items;
+            km_core_context_get(km_core_state_context(keyman->state),
+                                &context_items);
+            keyman->resetContext();
+            while (numOfDelete) {
+                ic->forwardKey(Key(FcitxKey_BackSpace));
+                numOfDelete -= 1;
+            }
+            km_core_context_set(km_core_state_context(keyman->state),
+                                context_items);
+            km_core_context_items_dispose(context_items);
+        }
+    }
+
+    std::string output;
+    for (size_t i = 0; actions->output[i]; i++) {
+        output.append(utf8::UCS4ToUTF8(actions->output[i]));
+    }
+    if (!output.empty()) {
+        keyman->char_buffer.type(output);
+    }
+
+    if (actions->do_alert) {
+        FCITX_KEYMAN_DEBUG() << "ALERT action";
+    }
+
+    if (!keyman->char_buffer.empty()) {
+        ic->commitString(keyman->char_buffer.userInput());
+        keyman->char_buffer.clear();
+    }
+    if (actions->emit_keystroke) {
+        FCITX_KEYMAN_DEBUG() << "EMIT_KEYSTROKE action";
+    } else {
+        keyEvent.filterAndAccept();
+    }
+
+    FCITX_KEYMAN_DEBUG() << "PERSIST_OPT action";
+    instance_->inputContextManager().foreach(
+        [this, &entry, &actions](InputContext *ic) {
+            if (auto keyman = this->state(entry, *ic)) {
+                auto event_status = km_core_state_options_update(
+                    keyman->state, actions->persist_options);
+                if (event_status != KM_CORE_STATUS_OK) {
+                    FCITX_KEYMAN_DEBUG()
+                        << "problem saving option for km_core_keyboard";
+                }
+            }
+            return true;
+        });
+
+    for (size_t i = 0; actions->persist_options[i].scope; i++) {
+        if (actions->persist_options[i].key &&
+            actions->persist_options[i].value) {
+            // Put the keyboard option into config
+            FCITX_KEYMAN_DEBUG() << "Saving keyboard option to Config";
+            // Load the current keyboard options from DConf
+            keyman->keyboard()->setOption(actions->persist_options[i].key,
+                                          actions->persist_options[i].value);
+        }
+    }
+
     context = km_core_state_context(keyman->state);
+    // FIXME: remove this once invalidate issue is resolved:
+    // https://github.com/keymanapp/keyman/issues/10182
+    size_t num;
+    auto actionItems = km_core_state_action_items(keyman->state, &num);
+    const bool hasInvalidate = std::any_of(
+        actionItems, actionItems + num, [](const km_core_action_item &item) {
+            return item.type == KM_CORE_IT_INVALIDATE_CONTEXT;
+        });
+    if (hasInvalidate) {
+        FCITX_KEYMAN_DEBUG() << "invalidate context";
+        km_core_context_clear(km_core_state_context(keyman->state));
+    }
     FCITX_KEYMAN_DEBUG() << "after processing all actions";
-    keyEvent.filterAndAccept();
 }
 
 void fcitx::KeymanEngine::reset(const fcitx::InputMethodEntry &entry,
