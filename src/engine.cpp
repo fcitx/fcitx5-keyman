@@ -194,7 +194,6 @@ public:
         rctrl_pressed = false;
         lalt_pressed = false;
         ralt_pressed = false;
-        char_buffer.clear();
     }
 
     auto *keyboard() { return keyboard_; }
@@ -204,7 +203,6 @@ public:
     bool rctrl_pressed = false;
     bool lalt_pressed = false;
     bool ralt_pressed = false;
-    InputBuffer char_buffer{InputBufferOption::FixedCursor};
 
 private:
     KeymanKeyboardData *keyboard_;
@@ -457,19 +455,14 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
 
     auto numOfDelete = actions->code_points_to_delete;
     FCITX_KEYMAN_DEBUG() << "BACK action " << numOfDelete;
-    while (numOfDelete > 0) {
-        if (!keyman->char_buffer.empty()) {
-            keyman->char_buffer.backspace();
-            numOfDelete--;
-        } else {
-            break;
-        }
-    }
 
     if (numOfDelete > 0) {
-        if (ic->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
+        if (numOfDelete == 1 && keyEvent.key().check(FcitxKey_BackSpace)) {
+            actions->emit_keystroke = KM_CORE_TRUE;
+        } else if (ic->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
             ic->deleteSurroundingText(-numOfDelete, numOfDelete);
-            FCITX_KEYMAN_DEBUG() << "deleting surrounding text 1 char";
+            FCITX_KEYMAN_DEBUG()
+                << "deleting surrounding text " << numOfDelete << " char(s)";
         } else {
             FCITX_KEYMAN_DEBUG() << "forwarding backspace with reset context";
             km_core_context_item *context_items;
@@ -490,17 +483,13 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     for (size_t i = 0; actions->output[i]; i++) {
         output.append(utf8::UCS4ToUTF8(actions->output[i]));
     }
-    if (!output.empty()) {
-        keyman->char_buffer.type(output);
-    }
 
     if (actions->do_alert) {
         FCITX_KEYMAN_DEBUG() << "ALERT action";
     }
 
-    if (!keyman->char_buffer.empty()) {
-        ic->commitString(keyman->char_buffer.userInput());
-        keyman->char_buffer.clear();
+    if (!output.empty()) {
+        ic->commitString(output);
     }
     if (actions->emit_keystroke) {
         FCITX_KEYMAN_DEBUG() << "EMIT_KEYSTROKE action";
