@@ -80,7 +80,7 @@ std::string utf16ToUTF8(Iter start, Iter end) {
     return result;
 }
 
-std::string get_current_context_text(km_core_context *context) {
+std::string get_current_context_text_debug(km_core_context *context) {
     std::string result;
     UniqueCPtr<km_core_context_item, km_core_context_items_dispose>
         context_items_ptr;
@@ -159,11 +159,11 @@ public:
                                  << keyboard_->metadata().id;
             return;
         };
-        resetContext();
+        updateContext();
     }
 
     // Update context from surrounding if possible.
-    void resetContext() {
+    void updateContext() {
         if (ic_->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
             ic_->surroundingText().isValid()) {
             auto text = ic_->surroundingText().text();
@@ -182,11 +182,12 @@ public:
                 state, reinterpret_cast<km_core_cp *>(utf16Context.data()));
             FCITX_KEYMAN_DEBUG()
                 << "Set context from application: " << new_context;
-        } else {
-            km_core_cp empty[1] = {0};
-            FCITX_KEYMAN_DEBUG() << "Clear context";
-            km_core_state_context_set_if_needed(state, empty);
         }
+    }
+
+    void clearContext() {
+        FCITX_KEYMAN_DEBUG() << "Clear context";
+        km_core_state_context_clear(state);
     }
 
     void reset() {
@@ -360,7 +361,7 @@ void fcitx::KeymanEngine::activate(const fcitx::InputMethodEntry &entry,
     if (!keyman) {
         return;
     }
-    keyman->resetContext();
+    keyman->updateContext();
 }
 
 void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
@@ -397,7 +398,7 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
         // key that we don't handles
         if (keyEvent.key().isCursorMove()) {
             km_core_context_clear(km_core_state_context(keyman->state));
-            keyman->resetContext();
+            keyman->updateContext();
         }
         return;
     }
@@ -438,17 +439,17 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
 
     if (ic->capabilityFlags().test(CapabilityFlag::SurroundingText) &&
         ic->surroundingText().isValid()) {
-        keyman->resetContext();
+        keyman->updateContext();
     }
 
     auto context = km_core_state_context(keyman->state);
     FCITX_KEYMAN_DEBUG() << "before process key event context: "
-                         << get_current_context_text(context);
+                         << get_current_context_text_debug(context);
     FCITX_KEYMAN_DEBUG() << "km_mod_state=" << km_mod_state;
     km_core_process_event(keyman->state, keycode_to_vk[keycode], km_mod_state,
                           !keyEvent.isRelease(), 0);
     FCITX_KEYMAN_DEBUG() << "after process key event context: "
-                         << get_current_context_text(context);
+                         << get_current_context_text_debug(context);
 
     UniqueCPtr<km_core_actions const, &km_core_actions_dispose> actions(
         km_core_state_get_actions(keyman->state));
@@ -465,17 +466,10 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
                 << "deleting surrounding text " << numOfDelete << " char(s)";
         } else {
             FCITX_KEYMAN_DEBUG() << "forwarding backspace with reset context";
-            km_core_context_item *context_items;
-            km_core_context_get(km_core_state_context(keyman->state),
-                                &context_items);
-            keyman->resetContext();
             while (numOfDelete) {
                 ic->forwardKey(Key(FcitxKey_BackSpace));
                 numOfDelete -= 1;
             }
-            km_core_context_set(km_core_state_context(keyman->state),
-                                context_items);
-            km_core_context_items_dispose(context_items);
         }
     }
 
@@ -523,19 +517,6 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
         }
     }
 
-    context = km_core_state_context(keyman->state);
-    // FIXME: remove this once invalidate issue is resolved:
-    // https://github.com/keymanapp/keyman/issues/10182
-    size_t num;
-    auto actionItems = km_core_state_action_items(keyman->state, &num);
-    const bool hasInvalidate = std::any_of(
-        actionItems, actionItems + num, [](const km_core_action_item &item) {
-            return item.type == KM_CORE_IT_INVALIDATE_CONTEXT;
-        });
-    if (hasInvalidate) {
-        FCITX_KEYMAN_DEBUG() << "invalidate context";
-        km_core_context_clear(km_core_state_context(keyman->state));
-    }
     FCITX_KEYMAN_DEBUG() << "after processing all actions";
 }
 
@@ -546,7 +527,7 @@ void fcitx::KeymanEngine::reset(const fcitx::InputMethodEntry &entry,
     if (!keyman) {
         return;
     }
-    keyman->resetContext();
+    keyman->clearContext();
     keyman->reset();
 }
 
