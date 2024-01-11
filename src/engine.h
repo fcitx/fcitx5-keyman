@@ -104,6 +104,7 @@ private:
     KeymanConfig config_;
     std::unique_ptr<HandlerTableEntry<EventHandler>> updateHandler_;
     int64_t timestamp_ = 0;
+    bool emit_keystroke = false;
 };
 
 class KeymanEngineFactory : public AddonFactory {
