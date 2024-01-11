@@ -450,7 +450,7 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     FCITX_KEYMAN_DEBUG() << "after process key event context: "
                          << get_current_context_text(context);
 
-    UniqueCPtr<km_core_actions, &km_core_actions_dispose> actions(
+    UniqueCPtr<km_core_actions const, &km_core_actions_dispose> actions(
         km_core_state_get_actions(keyman->state));
 
     auto numOfDelete = actions->code_points_to_delete;
@@ -458,7 +458,7 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
 
     if (numOfDelete > 0) {
         if (numOfDelete == 1 && keyEvent.key().check(FcitxKey_BackSpace)) {
-            actions->emit_keystroke = KM_CORE_TRUE;
+            emit_keystroke = true;
         } else if (ic->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
             ic->deleteSurroundingText(-numOfDelete, numOfDelete);
             FCITX_KEYMAN_DEBUG()
@@ -491,8 +491,9 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     if (!output.empty()) {
         ic->commitString(output);
     }
-    if (actions->emit_keystroke) {
+    if (actions->emit_keystroke || emit_keystroke) {
         FCITX_KEYMAN_DEBUG() << "EMIT_KEYSTROKE action";
+        emit_keystroke = false;
     } else {
         keyEvent.filterAndAccept();
     }
