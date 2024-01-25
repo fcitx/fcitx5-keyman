@@ -80,29 +80,11 @@ std::string utf16ToUTF8(Iter start, Iter end) {
     return result;
 }
 
-std::string get_current_context_text_debug(km_core_context *context) {
-    std::string result;
-    UniqueCPtr<km_core_context_item, km_core_context_items_dispose>
-        context_items_ptr;
-    km_core_status status = KM_CORE_STATUS_OK;
-    {
-        km_core_context_item *context_items = nullptr;
-        status = km_core_context_get(context, &context_items);
-        context_items_ptr.reset(context_items);
-    }
-    if (status == KM_CORE_STATUS_OK) {
-        size_t buf_size = 0;
-        km_core_context_items_to_utf8(context_items_ptr.get(), nullptr,
-                                      &buf_size);
-        if (buf_size) {
-            std::vector<char> buf;
-            buf.resize(buf_size + 1);
-            km_core_context_items_to_utf8(context_items_ptr.get(), buf.data(),
-                                          &buf_size);
-            return {buf.data()};
-        }
-    }
-    return "";
+std::string get_current_context_text_debug(km_core_state *state) {
+    km_core_cp *buf = km_core_state_context_debug(state, KM_CORE_DEBUG_CONTEXT_CACHED);
+    std::string result = buf;
+    km_core_cp_dispose(buf);
+    return result;
 }
 
 std::set<std::string> listKeymapDirs() {
@@ -397,7 +379,7 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     if (keycode_to_vk[keycode] == 0) {
         // key that we don't handles
         if (keyEvent.key().isCursorMove()) {
-            km_core_context_clear(km_core_state_context(keyman->state));
+            km_core_state_context_clear(keyman->state);
             keyman->updateContext();
         }
         return;
@@ -442,14 +424,13 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
         keyman->updateContext();
     }
 
-    auto context = km_core_state_context(keyman->state);
     FCITX_KEYMAN_DEBUG() << "before process key event context: "
-                         << get_current_context_text_debug(context);
+                         << get_current_context_text_debug(keyman->state);
     FCITX_KEYMAN_DEBUG() << "km_mod_state=" << km_mod_state;
     km_core_process_event(keyman->state, keycode_to_vk[keycode], km_mod_state,
                           !keyEvent.isRelease(), 0);
-    FCITX_KEYMAN_DEBUG() << "after process key event context: "
-                         << get_current_context_text_debug(context);
+    FCITX_KEYMAN_DEBUG() << "after process key event context : "
+                         << get_current_context_text_debug(keyman->state);
 
     UniqueCPtr<km_core_actions const, &km_core_actions_dispose> actions(
         km_core_state_get_actions(keyman->state));
@@ -474,9 +455,7 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     }
 
     std::string output;
-    for (size_t i = 0; actions->output[i]; i++) {
-        output.append(utf8::UCS4ToUTF8(actions->output[i]));
-    }
+    output.append(utf8::UCS4ToUTF8(actions->output));
 
     if (actions->do_alert) {
         FCITX_KEYMAN_DEBUG() << "ALERT action";
@@ -493,19 +472,6 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     }
 
     FCITX_KEYMAN_DEBUG() << "PERSIST_OPT action";
-    instance_->inputContextManager().foreach(
-        [this, &entry, &actions](InputContext *ic) {
-            if (auto keyman = this->state(entry, *ic)) {
-                auto event_status = km_core_state_options_update(
-                    keyman->state, actions->persist_options);
-                if (event_status != KM_CORE_STATUS_OK) {
-                    FCITX_KEYMAN_DEBUG()
-                        << "problem saving option for km_core_keyboard";
-                }
-            }
-            return true;
-        });
-
     for (size_t i = 0; actions->persist_options[i].scope; i++) {
         if (actions->persist_options[i].key &&
             actions->persist_options[i].value) {
@@ -516,6 +482,8 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
                                           actions->persist_options[i].value);
         }
     }
+
+    // TODO: set capslock if actions->new_caps_lock_state != KM_CORE_CAPS_UNCHANGED
 
     FCITX_KEYMAN_DEBUG() << "after processing all actions";
 }
