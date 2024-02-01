@@ -432,9 +432,7 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     FCITX_KEYMAN_DEBUG() << "after process key event context : "
                          << get_current_context_text_debug(keyman->state);
 
-    UniqueCPtr<km_core_actions const, &km_core_actions_dispose> actions(
-        km_core_state_get_actions(keyman->state));
-
+    km_core_actions const *actions = km_core_state_get_actions(keyman->state);
     auto numOfDelete = actions->code_points_to_delete;
     FCITX_KEYMAN_DEBUG() << "BACK action " << numOfDelete;
 
