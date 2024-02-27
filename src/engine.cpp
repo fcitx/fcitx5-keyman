@@ -81,9 +81,17 @@ std::string utf16ToUTF8(Iter start, Iter end) {
 }
 
 std::string get_current_context_text_debug(km_core_state *state) {
-    km_core_cp *buf = km_core_state_context_debug(state, KM_CORE_DEBUG_CONTEXT_CACHED);
-    std::string result = buf;
-    km_core_cp_dispose(buf);
+    km_core_cp *buf =
+        km_core_state_context_debug(state, KM_CORE_DEBUG_CONTEXT_CACHED);
+    std::string result;
+    if (buf) {
+        size_t n = 0;
+        while (buf[n]) {
+            n++;
+        }
+        result = utf16ToUTF8(buf, buf + n);
+        km_core_cp_dispose(buf);
+    }
     return result;
 }
 
@@ -439,7 +447,8 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     if (numOfDelete > 0) {
         if (numOfDelete == 1 && keyEvent.key().check(FcitxKey_BackSpace)) {
             emit_keystroke = true;
-        } else if (ic->capabilityFlags().test(CapabilityFlag::SurroundingText)) {
+        } else if (ic->capabilityFlags().test(
+                       CapabilityFlag::SurroundingText)) {
             ic->deleteSurroundingText(-numOfDelete, numOfDelete);
             FCITX_KEYMAN_DEBUG()
                 << "deleting surrounding text " << numOfDelete << " char(s)";
@@ -453,7 +462,11 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
     }
 
     std::string output;
-    output.append(utf8::UCS4ToUTF8(actions->output));
+    if (actions->output) {
+        for (size_t n = 0; actions->output[n]; n++) {
+            output.append(utf8::UCS4ToUTF8(actions->output[n]));
+        }
+    }
 
     if (actions->do_alert) {
         FCITX_KEYMAN_DEBUG() << "ALERT action";
@@ -481,7 +494,8 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
         }
     }
 
-    // TODO: set capslock if actions->new_caps_lock_state != KM_CORE_CAPS_UNCHANGED
+    // TODO: set capslock if actions->new_caps_lock_state !=
+    // KM_CORE_CAPS_UNCHANGED
 
     FCITX_KEYMAN_DEBUG() << "after processing all actions";
 }
