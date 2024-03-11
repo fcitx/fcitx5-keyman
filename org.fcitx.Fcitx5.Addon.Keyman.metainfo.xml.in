@@ -6,8 +6,12 @@
   <project_license>GPL-2.0+</project_license>
   <name>Keyman support for Fcitx 5</name>
   <summary>Type in your language with Keyman for Linux</summary>
+  <developer id="org.fcitx-im">
+      <name>The Fcitx Team</name>
+  </developer>
   <url type="homepage">https://fcitx-im.org</url>
   <url type="bugtracker">https://github.com/fcitx/fcitx5-keyman/issues</url>
+  <url type="vcs-browser">https://github.com/fcitx/fcitx5-keyman</url>
   <project_group>Fcitx</project_group>
   <releases>
     <release version="1.1.0" date="2024-02-28"/>
