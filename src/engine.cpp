@@ -8,11 +8,38 @@
 #include "engine.h"
 #include <fcntl.h>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <set>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
+#include <fcitx-config/iniparser.h>
+#include <fcitx-config/rawconfig.h>
+#include <fcitx-utils/capabilityflags.h>
+#include <fcitx-utils/fs.h>
+#include <fcitx-utils/i18n.h>
 #include <fcitx-utils/inputbuffer.h>
+#include <fcitx-utils/key.h>
+#include <fcitx-utils/keysym.h>
+#include <fcitx-utils/keysymgen.h>
 #include <fcitx-utils/log.h>
 #include <fcitx-utils/misc.h>
+#include <fcitx-utils/standardpath.h>
+#include <fcitx-utils/stringutils.h>
 #include <fcitx-utils/utf8.h>
+#include <fcitx/addoninstance.h>
+#include <fcitx/event.h>
+#include <fcitx/inputcontext.h>
+#include <fcitx/inputcontextproperty.h>
+#include <fcitx/inputmethodentry.h>
+#include <fcitx/instance.h>
 #include <keyman_core_api.h>
+#include <keyman_core_api_vkeys.h>
+#include <km_types.h>
 #include "kmpdata.h"
 #include "kmpmetadata.h"
 
@@ -24,13 +51,14 @@
 #define KEYMAN_RCTRL 97
 #define KEYMAN_RALT 100
 
-FCITX_DEFINE_LOG_CATEGORY(keyman, "keyman");
-#define FCITX_KEYMAN_DEBUG() FCITX_LOGC(::keyman, Debug)
-#define FCITX_KEYMAN_ERROR() FCITX_LOGC(::keyman, Error)
+#define FCITX_KEYMAN_DEBUG() FCITX_LOGC(::fcitx::keyman, Debug)
+#define FCITX_KEYMAN_ERROR() FCITX_LOGC(::fcitx::keyman, Error)
 
 namespace fcitx {
 
 namespace {
+
+FCITX_DEFINE_LOG_CATEGORY(keyman, "keyman");
 
 std::vector<char16_t> utf8ToUTF16(std::string_view str) {
     if (!utf8::validate(str)) {
@@ -175,7 +203,7 @@ public:
         }
     }
 
-    void clearContext() {
+    void clearContext() const {
         FCITX_KEYMAN_DEBUG() << "Clear context";
         km_core_state_context_clear(state);
     }
@@ -256,7 +284,7 @@ std::vector<InputMethodEntry> KeymanEngine::listInputMethods() {
     for (auto &[id, keyboard] : keyboards) {
         std::string icon = "km-config";
         // Check if icon file exists, otherwise fallback to keyman's icon.
-        for (auto *suffix : {".bmp.png", ".icon.png"}) {
+        for (const auto *suffix : {".bmp.png", ".icon.png"}) {
             auto path = stringutils::joinPath(keyboard->baseDir,
                                               stringutils::concat(id, suffix));
             if (fs::isreg(path)) {
@@ -273,10 +301,6 @@ std::vector<InputMethodEntry> KeymanEngine::listInputMethods() {
     }
     return result;
 }
-
-FCITX_ADDON_FACTORY(fcitx::KeymanEngineFactory);
-
-} // namespace fcitx
 
 void fcitx::KeymanKeyboardData::load() {
     if (loaded_) {
@@ -316,11 +340,11 @@ void fcitx::KeymanKeyboardData::load() {
 
 void fcitx::KeymanKeyboardData::setOption(const km_core_cp *key,
                                           const km_core_cp *value) {
-    auto keyEnd = key;
+    const auto *keyEnd = key;
     while (*keyEnd) {
         ++keyEnd;
     }
-    auto valueEnd = value;
+    const auto *valueEnd = value;
     while (*valueEnd) {
         ++valueEnd;
     }
@@ -345,9 +369,9 @@ fcitx::KeymanKeyboardData::~KeymanKeyboardData() { factory_.unregister(); }
 
 void fcitx::KeymanEngine::activate(const fcitx::InputMethodEntry &entry,
                                    fcitx::InputContextEvent &event) {
-    auto data = static_cast<const KeymanKeyboard *>(entry.userData());
+    const auto *data = static_cast<const KeymanKeyboard *>(entry.userData());
     data->load();
-    auto keyman = state(entry, *event.inputContext());
+    auto *keyman = state(entry, *event.inputContext());
     if (!keyman) {
         return;
     }
@@ -356,8 +380,8 @@ void fcitx::KeymanEngine::activate(const fcitx::InputMethodEntry &entry,
 
 void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
                                    fcitx::KeyEvent &keyEvent) {
-    auto ic = keyEvent.inputContext();
-    auto keyman = state(entry, *ic);
+    auto *ic = keyEvent.inputContext();
+    auto *keyman = state(entry, *ic);
     if (!keyman) {
         return;
     }
@@ -502,8 +526,8 @@ void fcitx::KeymanEngine::keyEvent(const fcitx::InputMethodEntry &entry,
 
 void fcitx::KeymanEngine::reset(const fcitx::InputMethodEntry &entry,
                                 fcitx::InputContextEvent &event) {
-    auto ic = event.inputContext();
-    auto keyman = state(entry, *ic);
+    auto *ic = event.inputContext();
+    auto *keyman = state(entry, *ic);
     if (!keyman) {
         return;
     }
@@ -515,13 +539,14 @@ fcitx::KeymanState *
 fcitx::KeymanEngine::state(const fcitx::InputMethodEntry &entry,
                            fcitx::InputContext &ic) {
 
-    auto userData = static_cast<const KeymanKeyboard *>(entry.userData());
+    const auto *userData =
+        static_cast<const KeymanKeyboard *>(entry.userData());
     auto &data = userData->data();
     // Check if data is ready.
     if (!data.kbpKeyboard() || !data.factory().registered()) {
         return nullptr;
     }
-    auto keyman = ic.propertyFor(&data.factory());
+    auto *keyman = ic.propertyFor(&data.factory());
     if (!keyman->state) {
         return nullptr;
     }
@@ -530,9 +555,13 @@ fcitx::KeymanEngine::state(const fcitx::InputMethodEntry &entry,
 
 std::string fcitx::KeymanEngine::subMode(const fcitx::InputMethodEntry &entry,
                                          fcitx::InputContext &ic) {
-    auto keyman = state(entry, ic);
+    auto *keyman = state(entry, ic);
     if (!keyman) {
         return _("Not available");
     }
     return "";
 }
+
+} // namespace fcitx
+
+FCITX_ADDON_FACTORY_V2(keyman, fcitx::KeymanEngineFactory);

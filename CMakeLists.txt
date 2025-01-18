@@ -1,12 +1,16 @@
-cmake_minimum_required(VERSION 3.4.0)
+cmake_minimum_required(VERSION 3.6)
 
 project(fcitx5-keyman VERSION 1.1.1)
 
+set(REQUIRED_FCITX_VERSION 5.1.12)
+find_package(ECM REQUIRED 1.0.0)
+set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 include(FeatureSummary)
 include(GNUInstallDirs)
+include(ECMUninstallTarget)
 
 find_package(Gettext REQUIRED)
-find_package(Fcitx5Core 5.0.10 REQUIRED)
+find_package(Fcitx5Core ${REQUIRED_FCITX_VERSION} REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(Keyman REQUIRED IMPORTED_TARGET "keyman_core")
 pkg_check_modules(JsonC REQUIRED IMPORTED_TARGET "json-c")

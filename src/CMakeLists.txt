@@ -2,7 +2,7 @@ set(KEYMAN_SOURCES
     engine.cpp
     kmpmetadata.cpp
 )
-add_library(keyman MODULE ${KEYMAN_SOURCES})
+add_fcitx5_addon(keyman ${KEYMAN_SOURCES})
 target_link_libraries(keyman Fcitx5::Core Fcitx5::Config PkgConfig::Keyman PkgConfig::JsonC)
 set_target_properties(keyman PROPERTIES PREFIX "")
 install(TARGETS keyman DESTINATION "${CMAKE_INSTALL_LIBDIR}/fcitx5")

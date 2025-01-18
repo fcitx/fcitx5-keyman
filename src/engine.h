@@ -7,23 +7,33 @@
 #ifndef _FCITX5_KEYMAN_ENGINE_H_
 #define _FCITX5_KEYMAN_ENGINE_H_
 
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <vector>
 #include <fcitx-config/configuration.h>
 #include <fcitx-config/iniparser.h>
+#include <fcitx-config/option.h>
+#include <fcitx-config/rawconfig.h>
 #include <fcitx-utils/event.h>
 #include <fcitx-utils/eventdispatcher.h>
+#include <fcitx-utils/handlertable.h>
 #include <fcitx-utils/i18n.h>
 #include <fcitx-utils/library.h>
 #include <fcitx-utils/log.h>
 #include <fcitx/action.h>
 #include <fcitx/addonfactory.h>
+#include <fcitx/addoninstance.h>
 #include <fcitx/addonmanager.h>
+#include <fcitx/event.h>
 #include <fcitx/icontheme.h>
 #include <fcitx/inputcontextproperty.h>
 #include <fcitx/inputmethodengine.h>
+#include <fcitx/inputmethodentry.h>
 #include <fcitx/instance.h>
 #include <fcitx/menu.h>
 #include <keyman_core_api.h>
+#include <km_types.h>
 #include "kmpmetadata.h"
 
 namespace fcitx {
@@ -85,15 +95,15 @@ class KeymanEngine final : public InputMethodEngineV2 {
 public:
     KeymanEngine(Instance *instance);
     Instance *instance() { return instance_; }
-    void activate(const fcitx::InputMethodEntry &,
-                  fcitx::InputContextEvent &) override;
+    void activate(const fcitx::InputMethodEntry & /*entry*/,
+                  fcitx::InputContextEvent & /*event*/) override;
     void keyEvent(const InputMethodEntry &entry, KeyEvent &keyEvent) override;
     std::vector<InputMethodEntry> listInputMethods() override;
-    void reset(const fcitx::InputMethodEntry &,
-               fcitx::InputContextEvent &) override;
+    void reset(const fcitx::InputMethodEntry & /*entry*/,
+               fcitx::InputContextEvent & /*event*/) override;
     const fcitx::Configuration *getConfig() const override { return &config_; }
-    std::string subMode(const fcitx::InputMethodEntry &,
-                        fcitx::InputContext &) override;
+    std::string subMode(const fcitx::InputMethodEntry & /*entry*/,
+                        fcitx::InputContext & /*inputContext*/) override;
 
 private:
     FCITX_ADDON_DEPENDENCY_LOADER(dbus, instance_->addonManager());
