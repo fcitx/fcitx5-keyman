@@ -7,9 +7,12 @@
  */
 #include "engine.h"
 #include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <set>
 #include <string>
@@ -108,7 +111,7 @@ std::string utf16ToUTF8(Iter start, Iter end) {
 }
 
 std::string get_current_context_text_debug(km_core_state *state) {
-    km_core_cp *buf =
+    km_core_cu *buf =
         km_core_state_context_debug(state, KM_CORE_DEBUG_CONTEXT_CACHED);
     std::string result;
     if (buf) {
@@ -117,7 +120,7 @@ std::string get_current_context_text_debug(km_core_state *state) {
             n++;
         }
         result = utf16ToUTF8(buf, buf + n);
-        km_core_cp_dispose(buf);
+        km_core_cu_dispose(buf);
     }
     return result;
 }
@@ -196,7 +199,7 @@ public:
             std::string new_context(startIter, endIter);
             auto utf16Context = utf8ToUTF16(new_context);
             km_core_state_context_set_if_needed(
-                state, reinterpret_cast<km_core_cp *>(utf16Context.data()));
+                state, reinterpret_cast<km_core_cu *>(utf16Context.data()));
             FCITX_KEYMAN_DEBUG()
                 << "Set context from application: " << new_context;
         }
@@ -319,8 +322,31 @@ void fcitx::KeymanKeyboardData::load() {
         return;
     }
 
-    km_core_status status_keyboard =
-        km_core_keyboard_load(kmxPath.data(), &keyboard_);
+    UnixFD fd(open(kmxPath.c_str(), O_RDONLY));
+    if (!fd.isValid()) {
+        FCITX_KEYMAN_ERROR() << "Failed to open kmx file: " << kmxPath;
+    }
+    struct stat stat_buf;
+    if (fstat(fd.fd(), &stat_buf) == -1) {
+        FCITX_KEYMAN_ERROR() << "Failed to stat kmx file: " << kmxPath;
+        return;
+    }
+    auto unmap = [&stat_buf](void *p) {
+        if (p && p != MAP_FAILED) {
+            munmap(p, stat_buf.st_size);
+        }
+    };
+    std::unique_ptr<void, std::function<void(void *)>> mmapped(nullptr, unmap);
+
+    mmapped.reset(
+        mmap(nullptr, stat_buf.st_size, PROT_READ, MAP_PRIVATE, fd.fd(), 0));
+    if (mmapped.get() == MAP_FAILED) {
+        FCITX_KEYMAN_ERROR() << "Failed to mmap kmx file: " << kmxPath;
+        return;
+    }
+
+    km_core_status status_keyboard = km_core_keyboard_load_from_blob(
+        kmxPath.data(), mmapped.get(), stat_buf.st_size, &keyboard_);
 
     if (status_keyboard != KM_CORE_STATUS_OK) {
         FCITX_KEYMAN_ERROR()
@@ -337,8 +363,8 @@ void fcitx::KeymanKeyboardData::load() {
     FCITX_KEYMAN_DEBUG() << config_;
 }
 
-void fcitx::KeymanKeyboardData::setOption(const km_core_cp *key,
-                                          const km_core_cp *value) {
+void fcitx::KeymanKeyboardData::setOption(const km_core_cu *key,
+                                          const km_core_cu *value) {
     const auto *keyEnd = key;
     while (*keyEnd) {
         ++keyEnd;

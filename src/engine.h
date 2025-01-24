@@ -54,7 +54,7 @@ public:
     const auto &metadata() const { return metadata_; }
     auto *kbpKeyboard() const { return keyboard_; }
     const auto &factory() const { return factory_; }
-    void setOption(const km_core_cp *key, const km_core_cp *value);
+    void setOption(const km_core_cu *key, const km_core_cu *value);
 
 private:
     Instance *instance_;
