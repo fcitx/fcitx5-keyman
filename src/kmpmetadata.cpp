@@ -18,7 +18,7 @@ namespace fcitx {
 
 std::string readStringValue(json_object *object, const char *field,
                             std::string_view defaultValue = "") {
-    if (auto subObject = json_object_object_get(object, field);
+    if (auto *subObject = json_object_object_get(object, field);
         subObject && json_object_get_type(subObject) == json_type_string) {
         return json_object_get_string(subObject);
     }
@@ -28,7 +28,7 @@ std::string readStringValue(json_object *object, const char *field,
 std::string readDescriptionValue(json_object *object, const char *field,
                                  std::string_view defaultValue = "") {
 
-    if (auto subObject = json_object_object_get(object, field);
+    if (auto *subObject = json_object_object_get(object, field);
         subObject && json_object_get_type(subObject) == json_type_object) {
         return readStringValue(subObject, "description", defaultValue);
     }
@@ -41,14 +41,14 @@ KmpMetadata::KmpMetadata(int fd) {
         throw std::runtime_error("Failed to parse kmp.json");
     }
 
-    if (auto kmpSystem = json_object_object_get(obj.get(), "system");
+    if (auto *kmpSystem = json_object_object_get(obj.get(), "system");
         kmpSystem && json_object_get_type(kmpSystem) == json_type_object) {
         keymanDeveloperVersion_ =
             readStringValue(kmpSystem, "keymanDeveloperVersion");
         fileVersion_ = readStringValue(kmpSystem, "fileVersion");
     }
 
-    if (auto kmpInfo = json_object_object_get(obj.get(), "info");
+    if (auto *kmpInfo = json_object_object_get(obj.get(), "info");
         kmpInfo && json_object_get_type(kmpInfo) == json_type_object) {
         name_ = readDescriptionValue(kmpInfo, "name");
         version_ = readDescriptionValue(kmpInfo, "version");
@@ -57,10 +57,10 @@ KmpMetadata::KmpMetadata(int fd) {
         website_ = readDescriptionValue(kmpInfo, "website");
     }
 
-    if (auto kmpFiles = json_object_object_get(obj.get(), "files");
+    if (auto *kmpFiles = json_object_object_get(obj.get(), "files");
         kmpFiles && json_object_get_type(kmpFiles) == json_type_array) {
         for (size_t i = 0, e = json_object_array_length(kmpFiles); i < e; i++) {
-            auto file = json_object_array_get_idx(kmpFiles, i);
+            auto *file = json_object_array_get_idx(kmpFiles, i);
             auto name = readStringValue(file, "name");
             auto description = readStringValue(file, "description");
             if (!name.empty()) {
@@ -69,23 +69,23 @@ KmpMetadata::KmpMetadata(int fd) {
         }
     }
 
-    if (auto kmpOptions = json_object_object_get(obj.get(), "options");
+    if (auto *kmpOptions = json_object_object_get(obj.get(), "options");
         kmpOptions && json_object_get_type(kmpOptions) == json_type_object) {
         readmeFile_ = readStringValue(kmpOptions, "readmeFile");
         graphicFile_ = readStringValue(kmpOptions, "graphicFile");
-        if (!files_.count(readmeFile_)) {
+        if (!files_.contains(readmeFile_)) {
             readmeFile_ = std::string();
         }
-        if (!files_.count(graphicFile_)) {
+        if (!files_.contains(graphicFile_)) {
             graphicFile_ = std::string();
         }
     }
 
-    if (auto kmpKeyboards = json_object_object_get(obj.get(), "keyboards");
+    if (auto *kmpKeyboards = json_object_object_get(obj.get(), "keyboards");
         kmpKeyboards && json_object_get_type(kmpKeyboards) == json_type_array) {
         for (size_t i = 0, e = json_object_array_length(kmpKeyboards); i < e;
              i++) {
-            auto file = json_object_array_get_idx(kmpKeyboards, i);
+            auto *file = json_object_array_get_idx(kmpKeyboards, i);
             KmpKeyboardMetadata keyboard;
             keyboard.id = readStringValue(file, "id");
             if (keyboard.id.empty()) {
@@ -96,12 +96,12 @@ KmpMetadata::KmpMetadata(int fd) {
                 keyboard.name = keyboard.id;
             }
             keyboard.version = readStringValue(file, "version");
-            if (auto kmpLanguages = json_object_object_get(file, "languages");
+            if (auto *kmpLanguages = json_object_object_get(file, "languages");
                 kmpLanguages &&
                 json_object_get_type(kmpLanguages) == json_type_array) {
                 for (size_t i = 0, e = json_object_array_length(kmpLanguages);
                      i < e; i++) {
-                    auto language = json_object_array_get_idx(kmpLanguages, i);
+                    auto *language = json_object_array_get_idx(kmpLanguages, i);
                     auto languageName = readStringValue(language, "name");
                     auto languageId = readStringValue(language, "id");
                     if (languageId.empty()) {
@@ -112,7 +112,7 @@ KmpMetadata::KmpMetadata(int fd) {
             }
 
             auto kmxFile = stringutils::concat(keyboard.id, ".kmx");
-            if (!files_.count(kmxFile)) {
+            if (!files_.contains(kmxFile)) {
                 continue;
             }
             keyboards_[keyboard.id] = std::move(keyboard);
