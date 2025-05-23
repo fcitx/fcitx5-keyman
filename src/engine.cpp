@@ -12,11 +12,13 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <set>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -30,7 +32,7 @@
 #include <fcitx-utils/keysym.h>
 #include <fcitx-utils/log.h>
 #include <fcitx-utils/misc.h>
-#include <fcitx-utils/standardpath.h>
+#include <fcitx-utils/standardpaths.h>
 #include <fcitx-utils/stringutils.h>
 #include <fcitx-utils/utf8.h>
 #include <fcitx/addoninstance.h>
@@ -128,14 +130,15 @@ std::string get_current_context_text_debug(km_core_state *state) {
 std::set<std::string> listKeymapDirs() {
     // Locate all directory under $XDG_DATA/keyman
     std::set<std::string> keymapDirs;
-    StandardPath::global().scanFiles(
-        StandardPath::Type::Data, "keyman",
-        [&keymapDirs](const std::string &path, const std::string &dir, bool) {
-            if (fs::isdir(stringutils::joinPath(dir, path))) {
-                keymapDirs.insert(path);
-            }
-            return true;
+    auto dirs = StandardPaths::global().locate(
+        StandardPathsType::Data, "keyman",
+        [](const std::filesystem::path &path) {
+            std::error_code ec;
+            return std::filesystem::is_directory(path, ec);
         });
+    for (const auto &[name, _] : dirs) {
+        keymapDirs.insert(name);
+    }
     return keymapDirs;
 }
 
@@ -241,9 +244,9 @@ KeymanEngine::KeymanEngine(Instance *instance) : instance_(instance) {
             std::unordered_map<std::string, std::unique_ptr<KeymanKeyboard>>
                 keyboards;
             for (const auto &keymapDir : keymapDirs) {
-                auto kmpJsonFiles = StandardPath::global().locateAll(
-                    StandardPath::Type::Data,
-                    stringutils::joinPath("keyman", keymapDir, "kmp.json"));
+                auto kmpJsonFiles = StandardPaths::global().locateAll(
+                    StandardPathsType::Data,
+                    std::filesystem::path("keyman") / keymapDir / "kmp.json");
                 for (const auto &kmpJsonFile : kmpJsonFiles) {
                     if (timestamp_ < fs::modifiedTime(kmpJsonFile)) {
                         update.setHasUpdate();
@@ -260,13 +263,19 @@ std::vector<InputMethodEntry> KeymanEngine::listInputMethods() {
     FCITX_KEYMAN_DEBUG() << "Keyman directories: " << keymapDirs;
     std::unordered_map<std::string, std::unique_ptr<KeymanKeyboard>> keyboards;
     for (const auto &keymapDir : keymapDirs) {
-        auto kmpJsonFiles = StandardPath::global().openAll(
-            StandardPath::Type::Data,
-            stringutils::joinPath("keyman", keymapDir, "kmp.json"), O_RDONLY);
-        for (const auto &kmpJsonFile : kmpJsonFiles) {
+        // Locate all kmp.json files under $XDG_DATA/keyman/<keymapDir>
+        // and load them.
+        std::vector<std::filesystem::path> kmpJsonPaths;
+        auto kmpJsonFiles = StandardPaths::global().openAll(
+            StandardPathsType::Data,
+            std::filesystem::path("keyman") / keymapDir / "kmp.json",
+            StandardPathsMode::Default, &kmpJsonPaths);
+        for (size_t i = 0; i < kmpJsonFiles.size(); i++) {
+            const auto &kmpJsonFile = kmpJsonFiles[i];
+            const auto &kmpJsonPath = kmpJsonPaths[i];
             try {
                 timestamp_ =
-                    std::max(timestamp_, fs::modifiedTime(kmpJsonFile.path()));
+                    std::max(timestamp_, fs::modifiedTime(kmpJsonPath));
                 KmpMetadata metadata(kmpJsonFile.fd());
                 for (const auto &[id, keyboard] : metadata.keyboards()) {
                     if (auto iter = keyboards.find(id);
@@ -276,7 +285,7 @@ std::vector<InputMethodEntry> KeymanEngine::listInputMethods() {
                     }
                     keyboards[id] = std::make_unique<KeymanKeyboard>(
                         instance_, keyboard, metadata,
-                        fs::dirName(kmpJsonFile.path()));
+                        kmpJsonPath.parent_path());
                 }
             } catch (...) {
             }
@@ -287,10 +296,10 @@ std::vector<InputMethodEntry> KeymanEngine::listInputMethods() {
         std::string icon = "km-config";
         // Check if icon file exists, otherwise fallback to keyman's icon.
         for (const auto *suffix : {".bmp.png", ".icon.png"}) {
-            auto path = stringutils::joinPath(keyboard->baseDir,
-                                              stringutils::concat(id, suffix));
-            if (fs::isreg(path)) {
-                icon = std::move(path);
+            auto path = keyboard->baseDir / stringutils::concat(id, suffix);
+            std::error_code ec;
+            if (std::filesystem::is_regular_file(path, ec)) {
+                icon = path.string();
                 break;
             }
         }
@@ -309,20 +318,21 @@ void fcitx::KeymanKeyboardData::load() {
         return;
     }
     loaded_ = true;
-    auto kmxPath = stringutils::joinPath(
-        metadata_.baseDir, stringutils::concat(metadata_.id, ".kmx"));
-    auto ldmlFile = stringutils::joinPath(
-        metadata_.baseDir, stringutils::concat(metadata_.id, ".ldml"));
-    if (!fs::isreg(ldmlFile)) {
+    auto kmxPath =
+        metadata_.baseDir / stringutils::concat(metadata_.id, ".kmx");
+    auto ldmlFile =
+        metadata_.baseDir / stringutils::concat(metadata_.id, ".ldml");
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(ldmlFile, ec)) {
         ldmlFile.clear();
     }
     ldmlFile_ = ldmlFile;
-    if (!fs::isreg(kmxPath)) {
+    if (!std::filesystem::is_regular_file(kmxPath, ec)) {
         FCITX_KEYMAN_ERROR() << "Failed to find kmx file. " << metadata_.id;
         return;
     }
 
-    UnixFD fd(open(kmxPath.c_str(), O_RDONLY));
+    UnixFD fd(open(kmxPath.string().c_str(), O_RDONLY));
     if (!fd.isValid()) {
         FCITX_KEYMAN_ERROR() << "Failed to open kmx file: " << kmxPath;
     }
@@ -346,7 +356,7 @@ void fcitx::KeymanKeyboardData::load() {
     }
 
     km_core_status status_keyboard = km_core_keyboard_load_from_blob(
-        kmxPath.data(), mmapped.get(), stat_buf.st_size, &keyboard_);
+        kmxPath.string().c_str(), mmapped.get(), stat_buf.st_size, &keyboard_);
 
     if (status_keyboard != KM_CORE_STATUS_OK) {
         FCITX_KEYMAN_ERROR()

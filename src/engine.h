@@ -8,8 +8,10 @@
 #define _FCITX5_KEYMAN_ENGINE_H_
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 #include <fcitx-config/configuration.h>
 #include <fcitx-config/iniparser.h>
@@ -26,7 +28,6 @@
 #include <fcitx/addoninstance.h>
 #include <fcitx/addonmanager.h>
 #include <fcitx/event.h>
-#include <fcitx/icontheme.h>
 #include <fcitx/inputcontextproperty.h>
 #include <fcitx/inputmethodengine.h>
 #include <fcitx/inputmethodentry.h>
@@ -69,8 +70,8 @@ private:
 class KeymanKeyboard : public InputMethodEntryUserData {
 public:
     KeymanKeyboard(Instance *instance, const KmpKeyboardMetadata &keyboard,
-                   const KmpMetadata &metadata, const std::string &dir)
-        : id(keyboard.id), version(keyboard.version), baseDir(dir),
+                   const KmpMetadata &metadata, std::filesystem::path dir)
+        : id(keyboard.id), version(keyboard.version), baseDir(std::move(dir)),
           name(keyboard.name),
           language(keyboard.languages.empty() ? ""
                                               : keyboard.languages[0].first),
@@ -78,7 +79,7 @@ public:
           data_(instance, *this) {}
     const std::string id;
     const std::string version;
-    const std::string baseDir;
+    const std::filesystem::path baseDir;
     const std::string name;
     const std::string language;
     const std::string readme;

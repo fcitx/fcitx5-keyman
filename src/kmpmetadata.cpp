@@ -5,8 +5,11 @@
  *
  */
 #include "kmpmetadata.h"
-#include <optional>
+#include <cstddef>
 #include <stdexcept>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <fcitx-utils/misc.h>
 #include <fcitx-utils/stringutils.h>
 #include <json-c/json.h>
