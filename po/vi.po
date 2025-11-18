@@ -3,15 +3,15 @@
 # This file is distributed under the same license as the fcitx5-keyman package.
 #
 # Translators:
-# hoanghuy309 <hoanghuy309@gmail.com>, 2025
+# Huy Võ <hoanghuy309@gmail.com>, 2025
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: fcitx5-keyman\n"
 "Report-Msgid-Bugs-To: fcitx-dev@googlegroups.com\n"
-"POT-Creation-Date: 2025-04-22 20:25+0000\n"
+"POT-Creation-Date: 2025-11-18 20:24+0000\n"
 "PO-Revision-Date: 2021-11-01 14:47+0000\n"
-"Last-Translator: hoanghuy309 <hoanghuy309@gmail.com>, 2025\n"
+"Last-Translator: Huy Võ <hoanghuy309@gmail.com>, 2025\n"
 "Language-Team: Vietnamese (https://app.transifex.com/fcitx/teams/12005/vi/)\n"
 "Language: vi\n"
 "MIME-Version: 1.0\n"
@@ -19,7 +19,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: src/engine.h:46
+#: src/engine.h:47
 msgid "Configuration"
 msgstr "Cấu hình"
 
@@ -31,10 +31,10 @@ msgstr ""
 msgid "Keyman support for Fcitx 5"
 msgstr ""
 
-#: src/engine.cpp:585
+#: src/engine.cpp:595
 msgid "Not available"
 msgstr ""
 
 #: org.fcitx.Fcitx5.Addon.Keyman.metainfo.xml.in:8
 msgid "Type in your language with Keyman for Linux"
-msgstr ""
+msgstr "Nhập ngôn ngữ của bạn bằng Keyman cho Linux"
