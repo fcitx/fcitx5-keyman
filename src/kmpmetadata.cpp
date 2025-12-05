@@ -44,15 +44,17 @@ KmpMetadata::KmpMetadata(int fd) {
         throw std::runtime_error("Failed to parse kmp.json");
     }
 
-    if (obj.contains("system") && obj["system"].is_object()) {
-        const auto &kmpSystem = obj["system"];
+    auto it = obj.find("system");
+    if (it != obj.end() && it->is_object()) {
+        const auto &kmpSystem = *it;
         keymanDeveloperVersion_ =
             readStringValue(kmpSystem, "keymanDeveloperVersion");
         fileVersion_ = readStringValue(kmpSystem, "fileVersion");
     }
 
-    if (obj.contains("info") && obj["info"].is_object()) {
-        const auto &kmpInfo = obj["info"];
+    it = obj.find("info");
+    if (it != obj.end() && it->is_object()) {
+        const auto &kmpInfo = *it;
         name_ = readDescriptionValue(kmpInfo, "name");
         version_ = readDescriptionValue(kmpInfo, "version");
         copyright_ = readDescriptionValue(kmpInfo, "copyright");
@@ -60,8 +62,9 @@ KmpMetadata::KmpMetadata(int fd) {
         website_ = readDescriptionValue(kmpInfo, "website");
     }
 
-    if (obj.contains("files") && obj["files"].is_array()) {
-        for (const auto &file : obj["files"]) {
+    it = obj.find("files");
+    if (it != obj.end() && it->is_array()) {
+        for (const auto &file : *it) {
             auto name = readStringValue(file, "name");
             auto description = readStringValue(file, "description");
             if (!name.empty()) {
@@ -70,8 +73,9 @@ KmpMetadata::KmpMetadata(int fd) {
         }
     }
 
-    if (obj.contains("options") && obj["options"].is_object()) {
-        const auto &kmpOptions = obj["options"];
+    it = obj.find("options");
+    if (it != obj.end() && it->is_object()) {
+        const auto &kmpOptions = *it;
         readmeFile_ = readStringValue(kmpOptions, "readmeFile");
         graphicFile_ = readStringValue(kmpOptions, "graphicFile");
         if (!files_.contains(readmeFile_)) {
@@ -82,8 +86,9 @@ KmpMetadata::KmpMetadata(int fd) {
         }
     }
 
-    if (obj.contains("keyboards") && obj["keyboards"].is_array()) {
-        for (const auto &file : obj["keyboards"]) {
+    it = obj.find("keyboards");
+    if (it != obj.end() && it->is_array()) {
+        for (const auto &file : *it) {
             KmpKeyboardMetadata keyboard;
             keyboard.id = readStringValue(file, "id");
             if (keyboard.id.empty()) {
@@ -94,8 +99,9 @@ KmpMetadata::KmpMetadata(int fd) {
                 keyboard.name = keyboard.id;
             }
             keyboard.version = readStringValue(file, "version");
-            if (file.contains("languages") && file["languages"].is_array()) {
-                for (const auto &language : file["languages"]) {
+            auto itLanguages = file.find("languages");
+            if (itLanguages != file.end() && itLanguages->is_array()) {
+                for (const auto &language : *itLanguages) {
                     auto languageName = readStringValue(language, "name");
                     auto languageId = readStringValue(language, "id");
                     if (languageId.empty()) {
