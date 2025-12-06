@@ -27,8 +27,8 @@ std::string readStringValue(const json &object, const char *field,
 
 std::string readDescriptionValue(const json &object, const char *field,
                                  std::string_view defaultValue = "") {
-    if (object.contains(field) && object[field].is_object()) {
-        return readStringValue(object[field], "description", defaultValue);
+    if (auto it = object.find(field); it != object.end() && it->is_object()) {
+        return readStringValue(*it, "description", defaultValue);
     }
     return std::string{defaultValue};
 }
