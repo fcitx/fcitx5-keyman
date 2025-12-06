@@ -11,9 +11,9 @@ include(ECMUninstallTarget)
 
 find_package(Gettext REQUIRED)
 find_package(Fcitx5Core ${REQUIRED_FCITX_VERSION} REQUIRED)
+find_package(nlohmann_json REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(Keyman REQUIRED IMPORTED_TARGET "keyman_core>=18")
-pkg_check_modules(JsonC REQUIRED IMPORTED_TARGET "json-c")
 
 add_definitions(-DFCITX_GETTEXT_DOMAIN=\"fcitx5-keyman\")
 fcitx5_add_i18n_definition()
