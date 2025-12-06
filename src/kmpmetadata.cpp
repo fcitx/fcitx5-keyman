@@ -44,16 +44,14 @@ KmpMetadata::KmpMetadata(int fd) {
         throw std::runtime_error("Failed to parse kmp.json");
     }
 
-    auto it = obj.find("system");
-    if (it != obj.end() && it->is_object()) {
+    if (auto it = obj.find("system"); it != obj.end() && it->is_object()) {
         const auto &kmpSystem = *it;
         keymanDeveloperVersion_ =
             readStringValue(kmpSystem, "keymanDeveloperVersion");
         fileVersion_ = readStringValue(kmpSystem, "fileVersion");
     }
 
-    it = obj.find("info");
-    if (it != obj.end() && it->is_object()) {
+    if (auto it = obj.find("info"); it != obj.end() && it->is_object()) {
         const auto &kmpInfo = *it;
         name_ = readDescriptionValue(kmpInfo, "name");
         version_ = readDescriptionValue(kmpInfo, "version");
@@ -62,8 +60,7 @@ KmpMetadata::KmpMetadata(int fd) {
         website_ = readDescriptionValue(kmpInfo, "website");
     }
 
-    it = obj.find("files");
-    if (it != obj.end() && it->is_array()) {
+    if (auto it = obj.find("files"); it != obj.end() && it->is_array()) {
         for (const auto &file : *it) {
             auto name = readStringValue(file, "name");
             auto description = readStringValue(file, "description");
@@ -73,8 +70,7 @@ KmpMetadata::KmpMetadata(int fd) {
         }
     }
 
-    it = obj.find("options");
-    if (it != obj.end() && it->is_object()) {
+    if (auto it = obj.find("options"); it != obj.end() && it->is_object()) {
         const auto &kmpOptions = *it;
         readmeFile_ = readStringValue(kmpOptions, "readmeFile");
         graphicFile_ = readStringValue(kmpOptions, "graphicFile");
@@ -86,8 +82,7 @@ KmpMetadata::KmpMetadata(int fd) {
         }
     }
 
-    it = obj.find("keyboards");
-    if (it != obj.end() && it->is_array()) {
+    if (auto it = obj.find("keyboards"); it != obj.end() && it->is_array()) {
         for (const auto &file : *it) {
             KmpKeyboardMetadata keyboard;
             keyboard.id = readStringValue(file, "id");
@@ -99,8 +94,8 @@ KmpMetadata::KmpMetadata(int fd) {
                 keyboard.name = keyboard.id;
             }
             keyboard.version = readStringValue(file, "version");
-            auto itLanguages = file.find("languages");
-            if (itLanguages != file.end() && itLanguages->is_array()) {
+            if (auto itLanguages = file.find("languages");
+                itLanguages != file.end() && itLanguages->is_array()) {
                 for (const auto &language : *itLanguages) {
                     auto languageName = readStringValue(language, "name");
                     auto languageId = readStringValue(language, "id");
