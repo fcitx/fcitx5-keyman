@@ -3,7 +3,7 @@ set(KEYMAN_SOURCES
     kmpmetadata.cpp
 )
 add_fcitx5_addon(keyman ${KEYMAN_SOURCES})
-target_link_libraries(keyman Fcitx5::Core Fcitx5::Config PkgConfig::Keyman PkgConfig::JsonC)
+target_link_libraries(keyman Fcitx5::Core Fcitx5::Config PkgConfig::Keyman nlohmann_json::nlohmann_json)
 set_target_properties(keyman PROPERTIES PREFIX "")
 install(TARGETS keyman DESTINATION "${CMAKE_INSTALL_LIBDIR}/fcitx5")
 configure_file(keyman.conf.in.in keyman.conf.in)
